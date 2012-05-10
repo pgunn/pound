@@ -1,0 +1,6 @@
+pounder/pndc are commandline unix tools to manage the BLOG. They're
+designed to be similar to earlier versions of POUND. Right now, they
+only work over a local database connection, but eventually they'll
+be able to also manage remote BLOGs, and will also be able to manage
+the Wiki.
+

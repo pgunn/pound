@@ -1,0 +1,16 @@
+My mod_perl stuff needs to be hooked up to Perl and Apache2 to
+function. I inserted the following into my /etc/httpd/conf.d/perl.conf:
+
+-------------------------------------------
+LoadModule perl_module modules/mod_perl.so
+PerlRequire /home/pgunn/mod_perl/poundstub.pl
+
+<Location /live>
+        SetHandler perl-script
+        PerlResponseHandler MyApache::POUND4
+</Location>
+
+-------------------------------------------
+
+You also need Postgres installed, and configured to run in password mode.
+Enjoy.

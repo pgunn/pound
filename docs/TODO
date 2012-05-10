@@ -1,0 +1,18 @@
+review Wiki markup
+Cleanup what code lives in what file
+ACLs
+Make Wiki pages non-ugly
+Cache database handles
+Event/notification code
+
+Add links to post to each blog the user has to the sidebar
+A different blog posting mechanism for posting to "comic" blogs
+			[             	] (Upload)
+	Alternate Text	[		]
+	Subtext		[		]
+		(Submit)
+
+When wiki/post rendering errors occur, display the errors in a separate
+	field
+Review how CSS is used everywhere
+

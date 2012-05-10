@@ -1,0 +1,26 @@
+Issues:
+	How to handle shared purpose between web submissions of blog entries and
+	CL submissions
+
+Options: 
+1) Toss it in the database and then ask it somehow to parse the submission, via
+	a) wget
+	b) Rely on Daemon process to handle it
+2) Have pndc parse post, POST it like a webclient would
+	Issues:
+		Authentication
+3) Have it write natively into correct database format
+	a) Share code via a module with POUND proper
+	b) Have it seperately understand the format. Maintenance nightmare.
+
+Side issues:
+	* Client won't have separate Subject field. Need to have a special
+		means for inline setting of topic, or otherwise handle this
+		in a way that won't make the web client deal with this kind
+		of thing.
+		* Perhaps use [!Subject=This is a Subject] format. This has the
+			benefit of being easily generable for text clients
+			inline, allowing easy singlefile dumps of entries.
+			It's extensible to other entry attributes too, like
+			topics.
+

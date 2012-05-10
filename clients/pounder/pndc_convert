@@ -1,0 +1,138 @@
+#!/usr/bin/perl -w
+
+# Comment
+our $debug=1;
+use strict;
+
+main();
+
+
+
+sub main
+{
+my ($indir,$outdir) = handle_args(@ARGV);
+opendir(INDIR, $indir);
+my @files =
+	sort {$a <=> $b}
+	grep {!/^\./}
+	grep {m/^\d+$/}
+	readdir(INDIR);
+closedir(INDIR);
+transform_files($indir, $outdir, @files);
+}
+
+sub transform_files($$@;)
+{
+my ($ind, $outd, @files) = @_;
+foreach my $file (@files)
+	{
+	dprint(0, "Transforming file $file");
+	open(IN, "<$ind/$file") || die "Could not open input [$ind/$file]: $!\n";
+	open(OUT, ">$outd/$file") || die "Could not open output [$outd/$file]: $!\n";
+	my $fileguts;
+		{ # slurp whole file
+		local $/;
+		$fileguts = <IN>;
+		}
+	close(IN);
+	do_ffilter($fileguts);
+	my $title = get_and_remove_ftitle($fileguts);
+	remove_fcolors($fileguts);
+	my @topics = get_and_remove_ftopics($fileguts);
+	my $isprivate = f_isprivate($fileguts);
+	print OUT qq{[!Subject:$title]\n};
+	foreach my $topic (@topics)
+		{
+		print OUT qq{[!Topic:$topic]\n};
+		}
+	if($isprivate)
+		{
+		print OUT qq{[!PRIVATE]\n};
+		}
+	print OUT "\n";
+	print OUT transform_inner_part($fileguts);
+	print "\n";
+	close(OUT);
+	}
+
+}
+
+sub do_ffilter($;)
+{ # Trimmed cousin to routine in older version of POUND's pndc
+$_[0] =~ s/^[\n ]+//s; # Remove initial newlines
+$_[0] =~ s/[\n ]+$//s; # and trailing newlines
+}
+
+sub get_and_remove_ftitle($;)
+{
+($_[0] =~ s/\A([^\n]*)\n\n//) || return "No title"; # Extract first line if followed by two newlines
+my $returner = $1;
+if((! defined($returner)) || ($returner !~ /\w/))
+	{$returner = "No Title";}
+return $returner;
+}
+
+sub remove_fcolors($;)
+{
+$_[0] =~ s/^COLOR: *([A-Za-z]+)\/([A-Za-z]+)//msig;
+}
+
+sub get_and_remove_ftopics($;)
+{
+if($_[0] =~ s/^TOPICS?: *([^\n]*)\n//im)
+	{return map {s/^ +//; s/ +$//;$_;} (split /,/, $1);}
+else
+	{return ();}
+}
+
+sub f_isprivate($;)
+{
+if($_[0] =~ s/^CONTENT: ?Private//msgi) {return 1;}
+return 0;
+}
+
+sub handle_args
+{
+my @args = @_;
+if(@args != 2)
+	{
+	die "Usage: pndc_convert INDIR OUTDIR\n";
+	}
+my ($in,$out) = @_;
+if(! -d $in)
+	{
+	die "Bad input directory $in\n";
+	}
+if(! -d $out)
+	{
+	dprint(0, "Making output directory $out\n");
+	mkdir($out) || die "Could not make output directory: $!\n";
+	}
+else
+	{
+	dprint(0, "Reusing output directory $out. Will not remove existing files but will overwrite them\n");
+	}
+return ($in,$out);
+}
+
+sub dprint($$;)
+{
+my ($lvl,$text) = @_;
+local $|=1;
+if($lvl <= $debug)
+	{print $text;}
+}
+
+sub transform_inner_part($;)
+{
+my ($returner) = @_;
+$returner =~ s/<\/a>/]/ig;
+$returner =~ s/<a href="([^"]*)"[^>]*>/[$1|/ig;
+if( ($returner =~ m/<pre/i) || ($returner =~ /blog\.dachte\.org/i) )
+	{
+	print " - This file may need further attention\n";
+	sleep(1);
+	}
+return $returner;
+}
+

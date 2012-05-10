@@ -1,0 +1,65 @@
+#!/usr/bin/perl -w
+
+use strict;
+our $configfile = "./pmsg.cfg";
+
+main();
+
+# This is mostly written as a test - sends a message to the named user
+# using all msgmeths they have defined, or sensibly tell the user that's
+# inpossible if need be
+
+#################
+
+sub main
+{
+my %config = read_configfile($configfile);
+load_modules($config{modules});
+my ($recip, $msg) = handle_args(@ARGV);
+my $uid = uid_from_login(login => $recip);
+if($uid == 0)
+	{die "No such user\n";}
+
+add_msg(user_id => $uid, subject => "PMSG message", body => $msg);
+
+}
+
+sub load_modules($;)
+{ # Load the POUND modules needed
+my ($modpath) = @_;
+unshift(@INC, $modpath);
+foreach my $module (qw/MyApache::POUND::POUNDDB MyApache::POUND::POUNDUser MyApache::POUND::POUNDMessage/)
+	{
+	print "Attempting to load $module\n";
+	eval "use $module";
+	warn $@ if $@;
+	print "Loaded\n";
+	}
+}
+
+sub read_configfile
+{ # Parse configfile of form option=value
+my ($cfile) = @_;
+my %cfg;
+
+open(CF, "<$cfile") || die "Could not open configfile [$cfile]: $!\n";
+while(<CF>)
+	{
+	chomp;
+	s/^\s*//g;
+	next if /^(?#.*)$/; # Comment or blank line
+	my ($cfgkey, $option) = split(/=/);
+	$cfg{$cfgkey} = $option;
+	}
+close(CF);
+return %cfg;
+}
+
+sub handle_args
+{
+my @args = @_;
+if(@args != 2)
+	{die "Usage: pmsg bloguser \"message\"\n";}
+return (@args);
+}
+

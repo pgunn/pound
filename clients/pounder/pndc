@@ -1,0 +1,298 @@
+#!/usr/bin/perl -w
+
+use strict;
+use DBI;
+our $debug=1;
+my $version = "2.0";
+our $configfile = "./pndc.cfg";
+use Cwd;
+my @req_config = qw/user dbase pass modules/;
+my @opt_config = qw/blog/;
+
+main();
+
+####################################
+sub main
+{
+my ($cmd, @args) = handle_args();
+my %config = read_configfile($configfile, \@req_config, \@opt_config);
+load_modules($config{modules});
+my $dbh = do_connect($config{dbase}, $config{user}, $config{pass});
+if(defined($config{blog})) {unshift(@args, $config{blog});}
+
+if($cmd =~ /^post$/i)
+	{do_post($dbh, @args)} # 1+ argument, the name of the file(s) to post
+elsif($cmd =~ /^list$/i)
+	{do_list($dbh);}
+elsif($cmd =~ /^topic$/i)
+	{do_topic(@args);}
+elsif($cmd =~ /^upload$/i)
+	{do_upfile($dbh, @args);}
+elsif($cmd =~ /^config$/i)
+	{do_config($dbh, @args);}
+else
+	 {$dbh->disconnect();die "unrecognized command\n";}
+$dbh->disconnect();
+exit;
+}
+
+sub do_connect
+{
+my ($dbase, $user, $pass) = @_;
+my $dbh = DBI->connect("dbi:Pg:dbname=$dbase", $user, $pass);
+if($dbh->ping)
+        {if($debug) {print "Connected\n";} }
+else
+        {die "Not connected: $!<BR>\n";}
+return $dbh;
+}
+
+sub do_config($$$)
+{ # FIXME Add ability to list config and add new config keys
+my ($dbh, $key, $val) = @_;
+my $cset = $dbh->prepare("UPDATE config SET value=? WHERE name=?");
+$cset->execute($val, $key);
+}
+
+sub do_upfile($$$$$$)
+{ # upload \$namespace \$wik_filename \$filename \$filetype \$mimetype
+my ($dbh, $namespace, $wikfn, $filename, $filetype, $mimetype) = @_;
+my $data;
+	{
+	open(UF, "<$filename")
+		|| die "Could not open source filename $filename\n";
+	local $/;
+	$data = <UF>; # Slurrrrp
+	close(UF);
+	}
+print "Read input file with length " . length($data) . "\n";
+
+if(file_exists(filename => $wikfn, namespace => $namespace))
+	{
+	die "Sorry, that file already exists in the database. Nuke it first.\n";
+	}
+# Honestly not sure about that first attribute. Documentation is unclear.
+my $lobj = $dbh->func($dbh->{pg_INV_WRITE}|$dbh->{pg_INV_READ}, 'lo_creat');
+if(! defined($lobj))
+	{die "lo_creat failed\n";}
+else
+	{print "New object with id $lobj\n";}
+
+$dbh->{'AutoCommit'} = 0;
+my $lod = $dbh->func($lobj, $dbh->{pg_INV_WRITE}, 'lo_open');
+if(! defined($lod))
+	{die "lo_open failed\n";}
+
+my $nbytes = $dbh->func($lod, $data, length($data), 'lo_write');
+if(! defined $nbytes)
+	{die "lo_write failed\n";}
+
+$dbh->func($lod, 'lo_close');
+$dbh->commit();
+$dbh->{'AutoCommit'} = 1;
+
+print "Done! I hope it worked! No error checking yet!\n";
+my $fileregister = $dbh->prepare("INSERT INTO files(name,namespace,storetype,blobid,timehere,version,filetype,mimetype) VALUES(?,?,?,?,?,?,?,?)");
+$fileregister->execute($wikfn, $namespace, 'blob', $lobj, time(), 1, $filetype, $mimetype);
+print "Entry made!\n";
+}
+
+sub handle_args
+{
+my @my_argv = @ARGV;
+if((@my_argv == 0) || ($my_argv[0] =~ /^-?-?h(:?elp)?$/) )
+	{do_help();}
+my $cmd = shift(@my_argv);
+if($cmd =~ /-?-?v(:?ersion)?/)
+	{do_version();}
+return ($cmd, @my_argv); # Remember, we shifted it.
+}
+
+sub do_help
+{
+print <<EOHELP;
+PNDC - The POUND client
+
+Commands:
+	post \$blog \$msgid - Posts or updates that entry with provided file
+	get  \$blog \$msgid - Retrieves that entry to a file
+	list \$blog - Displays list of all entries
+	stat \$blog \$msgid - Displays all info on the provided entryid
+	topic \$blog \$topicname \$description [\$imgurl\] - Sets info on a topic
+	upload \$namespace \$wik_filename \$filename \$filetype \$mimetype
+
+Not all operations are implemented yet.
+
+EOHELP
+exit;
+}
+
+sub do_version
+{
+print <<EOV;
+pndc version $version
+Part of the POUND blog software, written by Pat Gunn
+Available at http://www.dachte.org
+
+EOV
+exit;
+}
+
+sub do_topic($$$$$;)
+{
+my ($blog, $tname, $desc, $imgurl) = @_;
+# later do sanity checks on topic names to ban spaces and the like
+my $blogid = blogid_for_blogname(blogname => $blog);
+if(topic_exists(blogid => $blogid, topicname => $tname))
+	{
+	clean_topic(blogid => $blogid, topicname => $tname);
+	}
+else
+	{
+	new_topic(blogid => $blogid, topicname => $tname);
+	}
+setup_topic(blogid => $blogid, topicname => $tname, description => $desc, image_url => $imgurl);
+}
+
+sub do_post
+{
+my ($dbh, @fns) = @_;
+my $blog = shift(@fns);
+
+if(! defined($blog))
+	{ # Not in configfile AND not specified on cmdline
+	die "No BLOG given! Please give it as the first argument\n";
+	}
+
+foreach my $fn (@fns)
+	{
+	print "Parse file $fn\n";
+	my $msgid = depath($fn);
+	open(FILE, $fn) || die "Could not open file [$fn]: $!\n";
+	local $/; # We want the whole file
+	my $entfile = <FILE>;
+	close(FILE);
+	my %attrs = parse_blog_attribs(msgref => \$entfile);
+	my $blogid = blogid_for_blogname(blogname => $blog);
+	print "File loaded, preparing to post..\n";
+	if(! defined($blogid))
+		{
+		die "Blog $blog not found!\n";
+		}
+	if(msgid_exists($dbh, $blogid, $msgid))
+		{ # Make existing entry into a stub, clear all topics/etc
+		print "Post exists, purging for repost..\n";
+		my %res = clean_blogentry(blogid => $blogid, zeit => $msgid);
+		if($res{fail})
+			{die "Failed: $res{reason}\n";}
+		}
+	else
+		{
+		print "Making new post entry..\n";
+		new_blogentry(blogid => $blogid, msgid => $msgid); # Make a stub entry
+		}
+	print "Placing data into post..\n";
+	my %state = blog_post(blogid => $blogid, entryzeit => $msgid, content => $entfile, attrs => \%attrs);
+	if($state{fail} == 1)
+		{
+		die "Post failed: $state{reason}\n";
+		}
+	if($attrs{private})
+		{
+		blogentry_set_privatep_flag(bentry => bentry_by_zeit(blogid => $blogid, zeit => $msgid), private => 1);
+		}
+	if($state{fail} == 2)
+		{
+		if($state{post_fail})
+			{warn "Post partially failed\n";}
+		if($state{lj_fail})
+			{warn "LJ sync failed\n";}
+		print $state{reason} . "\n";
+		}
+	}
+}
+
+sub msgid_exists($$;)
+{ # UPDATED. 
+my ($dbh, $blog, $msgid) = @_;
+my $equery = $dbh->prepare("SELECT id from blogentry WHERE zeit=? AND blog=?");
+$equery->execute($msgid, $blog);
+my $foo = $equery->fetchall_arrayref();
+return defined($$foo[0][0]); # There is probably a better way to write this
+}
+
+sub msgid_to_eid($$$;)
+{ # UPDATED
+my ($dbh, $blog, $msgid) = @_;
+my $tquery = $dbh->prepare("select id from blogentry where zeit=? AND blog=?");
+$tquery->execute($msgid, $blog);
+my $tqval = $tquery->fetchall_arrayref();
+return ($$tqval[0][0]);
+}
+
+sub num_to_bool($)
+{
+if($_[0]){return 't'};
+return 'f';
+}
+
+sub depath($;)
+{ # Chop off all but the last part of a full path-filename
+my ($given) = @_;
+my $returner = $given;
+$returner =~ s/^.*\///;
+return $returner;
+}
+
+sub readfile($;)
+{
+local $/;
+open(RF, $_[0]) || die("Could not open [" . $_[0] . "]: $!\n");
+my $returner = <RF>;
+close(RF);
+return $returner;
+}
+
+sub read_configfile
+{ # Parse configfile of form option=value
+my ($cfile, $req_config, $opt_config) = @_;
+my %cfg;
+my @all_config;
+push(@all_config, @$opt_config, @$req_config);
+
+open(CF, "<$cfile") || die "Could not open configfile [$cfile]: $!\n";
+while(<CF>)
+	{
+	chomp;
+	s/^\s*//g;
+	next if /^(?#.*)$/; # Comment or blank line
+	my ($cfgkey, $option) = split(/=/);
+	if(grep(/$cfgkey/, @all_config))
+		{
+		$cfg{$cfgkey} = $option;
+		}
+	}
+close(CF);
+foreach my $cfgopt (@req_config)
+	{
+	if(! defined($cfg{$cfgopt}) )
+		{
+		die "FATAL: Configfile did not set $cfgopt\n";
+		}
+	}
+return %cfg;
+}
+
+sub load_modules($;)
+{ # Load the POUND modules needed
+my ($modpath) = @_;
+unshift(@INC, $modpath);
+foreach my $module (qw/MyApache::POUND::POUNDAttribs MyApache::POUND::POUNDBLOGDB MyApache::POUND::POUNDDB MyApache::POUND::POUNDBLOG MyApache::POUND::POUNDFiles MyApache::POUND::POUNDFilesDB/)
+	{
+	print "Attempting to load $module\n";
+	eval "use $module";
+	warn $@ if $@;
+	print "Loaded\n";
+	}
+}
+

@@ -1,0 +1,34 @@
+The parser for the Wiki format is implemented in POUNDMarkup.pm
+It is designed to convert Wiki documents, similar but not identical to
+the MediaWiki format, into HTML and any other formats that would be
+useful.
+
+It is a multi-pass parser without a formal grammar. There are three
+primary classifications of passes:
+
+document-level
+line-level
+element-level
+
+The document-level passes are designed for two purposes
+First, some entry-time information is captured (and removed from the document)
+when the document is initially introduced into the system, and is then moved
+into other database tables. Secondly, other tags are available that tweak the
+behavior of the display engine. Document-level passes use markup tags that
+look like this:
+[!SOMETHING]
+
+When it makes sense, the second type of document-level passes should be moved
+into database tables eventually.
+
+Line-level passes are designed to handle markup that is dependant on
+line-level structure of the document. This ranges from the double-newline
+becoming a paragraph break to the block-level markups (lists and similar).
+The block-level markup is managed by what is essentially a state machine.
+
+Element-level passes handle other markup that's not dependant on being
+whitespace aware. Markup of this sort that involves opening and closing
+characteristics does not restrain its action to within a single line -- these
+filters work over the entire document.
+
+

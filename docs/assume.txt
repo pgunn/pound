@@ -1,0 +1,6 @@
+A list of things the code assumes:
+
+There will be no blog called 'wiki', because the namespace table calls itself
+	after the blog name, and wiki is used for files belonging to the wiki
+Usernames must be safe to render without executing code
+File attributes must not contain commas or pipes

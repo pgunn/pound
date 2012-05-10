@@ -1,0 +1,117 @@
+#!/usr/bin/perl -w
+
+use strict;
+our $configfile = "./pmsg.cfg";
+
+main();
+
+# Simple POUNDMessage client daemon
+#################
+
+sub main
+{
+my %config = read_configfile($configfile);
+load_modules($config{modules});
+do
+	{
+	my @msgs = ls_msgs(); # FIXME Later switch to apply nag_dist
+	my @msgi = map
+			{
+			my %hldr = get_msg(queueid => $_);
+			$hldr{id} = $_; # Save id...
+			\%hldr;
+			} @msgs;
+
+# 	print "D: I see "
+# 	. scalar(@msgs) .
+# 	" messages\n"
+# 	. join('', map
+# 			{
+# 			"\tID: $$_{id}:\n" 
+# 			. "\t\tTo: " . $$_{recipient} . "\n"
+# 			. "\t\tClass: " . $$_{class} . "\n"
+# 			. "\t\tAuto-D: " . $$_{autodisarm} . "\n"
+# 			. "\t\tSubject: " . $$_{subject} . "\n"
+# 			. "\t\tBody: " . $$_{body} . "\n";
+# 			}
+# 		@msgi);
+	map
+		{
+		dispatch_pmsg(info => $_);
+		if($$_{autodisarm})
+			{
+			rm_msg(queueid => $$_{id});
+			}
+		} @msgi;
+	}
+while(sleep(60 * $config{sleeptime}));
+}
+
+sub dispatch_pmsg
+{ # FIXME incomplete
+my $args = MyApache::POUND::Argpass::new('clean', @_);
+my $info = $args->mandate("info");
+$args->argok();
+
+my $ok = 1;
+my $msg = '';
+
+my @nmeths = get_notify_methods(user_id => $$info{recipient});
+foreach my $nmeth (@nmeths)
+	{
+	my %nmi = get_notify_method(method_id => $nmeth);
+	if($nmi{method} eq 'email')
+		{
+
+		}
+	elsif($nmi{method} eq 'xmpp')
+		{
+
+		}
+	else
+		{
+		$ok = 0;
+		$msg .= "Unknown notification method $nmi{method}\n";
+		}
+	}
+}
+
+sub load_modules($;)
+{ # Load the POUND modules needed
+my ($modpath) = @_;
+unshift(@INC, $modpath);
+foreach my $module (qw/MyApache::POUND::POUNDDB MyApache::POUND::POUNDUser MyApache::POUND::POUNDMessage MyApache::POUND::Argpass/)
+	{
+	print "Attempting to load $module\n";
+	eval "use $module";
+	warn $@ if $@;
+	print "Loaded\n";
+	}
+}
+
+sub read_configfile
+{ # Parse configfile of form option=value
+my ($cfile) = @_;
+my %cfg;
+
+open(CF, "<$cfile") || die "Could not open configfile [$cfile]: $!\n";
+while(<CF>)
+	{
+	chomp;
+	s/^\s*//g;
+	next if /^(?#.*)$/; # Comment or blank line
+	my ($cfgkey, $option) = split(/=/);
+	$cfg{$cfgkey} = $option;
+	}
+close(CF);
+return %cfg;
+}
+
+sub handle_args
+{
+my @args = @_;
+if(@args != 2)
+	{die "Usage: pmsg bloguser \"message\"\n";}
+return (@args);
+}
+
