@@ -1,10 +1,13 @@
-POUND is a Wiki/Blog engine I developed in the early 2000s. I hosted my own content on it,
-as well as that from a few friends. It was one of the better of my programming projects,
-in that I learned a lot of different technology stacks that I wouldn't work with much on
-the job (work-wise I tend to focus on much lower levels of the tech stack).
+POUND is a Wiki/Blog engine I developed in the early 2000s.
+I hosted my own content on it, as well as that from a few friends.
+It was one of the better of my programming projects, in that
+I learned a lot of different technology stacks that I wouldn't work
+with much on the job (work-wise I tend to focus on much lower levels
+of the tech stack).
 
-I stopped working on it when I stopped posting regularly to my own hosted blog and started
-using G+ instead, although my interest had waned considerably by then.
+I stopped working on it when I stopped posting regularly to my own
+hosted blog and started using G+ instead, although my interest had
+waned considerably by then.
 
 To use:
 My mod_perl stuff needs to be hooked up to Perl and Apache2 to
