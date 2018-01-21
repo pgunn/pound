@@ -38,24 +38,24 @@ elevel_markup(data => $pdatref, context => $context); # Mutation is easier here
 $$pdatref =~ s/<lj-cut>/<cut>/ig;
 $$pdatref =~ s/<\/lj-cut>/<\/cut>/ig;
 if(defined($contype) && ($contype =~ /:hidecuts:/))
-{
-my $text;
-if($cutref)
 	{
-	$text = get_htlink(
-		target => $cutref,
-		content => q{(view full entry for contents)}); # XXX Do we want to set follow_ok to 1?
+	my $text;
+	if($cutref)
+		{
+		$text = get_htlink(
+			target => $cutref,
+			content => q{(view full entry for contents)}); # XXX Do we want to set follow_ok to 1?
+		}
+	else
+		{$text = q{(view full entry for contents)};}
+	
+	$$pdatref =~ s/<cut>.*?<\/cut>/$text/sig; # Context type directed us to not display this content
 	}
-else
-	{$text = q{(view full entry for contents)};}
-
-$$pdatref =~ s/<cut>.*?<\/cut>/$text/sig; # Context type directed us to not display this content
-}
 if(defined($contype) && ($contype =~ /:for_lj:/))
-{
-$$pdatref =~ s/<cut>/<lj-cut>/ig; # For this case, lj wants the tag to be lj-cut
-$$pdatref =~ s/<\/cut>/<\/lj-cut>/ig;
-}
+	{
+	$$pdatref =~ s/<cut>/<lj-cut>/ig; # For this case, lj wants the tag to be lj-cut
+	$$pdatref =~ s/<\/cut>/<\/lj-cut>/ig;
+	}
 return $$pdatref;
 }
 
