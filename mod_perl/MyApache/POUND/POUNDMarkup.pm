@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# Handles the markup. Probably pretty hairy.
+# Handles the markup. This code is awful.
 
 use strict;
 use DBI;
@@ -82,14 +82,14 @@ my $in_pre = 0;
 my @parts = split(/(<\/?pre[^>]*>)/i, $guts); # Parantheses keep the pattern
 my @returner;
 foreach my $part (@parts)
-{
-if($part =~ /<pre/i) # Start of a pre block
-	{$in_pre = 1;next;}
-elsif($part =~ /<\/pre/i) # End of a pre block
-	{$in_pre = 0;next;}
-if(! $in_pre) {$part =~ tr/\n\r\f//d;}
-push(@returner, $part);
-}
+	{
+	if($part =~ /<pre/i) # Start of a pre block
+		{$in_pre = 1;next;}
+	elsif($part =~ /<\/pre/i) # End of a pre block
+		{$in_pre = 0;next;}
+	if(! $in_pre) {$part =~ tr/\n\r\f//d;}
+	push(@returner, $part);
+	}
 return join('', @returner);
 }
 
@@ -112,40 +112,40 @@ $parser{lastblank} = 1; # Coalesce multiple blank lines into one
 		# init as 1 so we eat all the opening spaces before we start
 # End state machine init
 foreach my $line (@lines) # Run the state machine
-{
-if(	($parser{listsig} ne '') || # We're in a block of some sort, start, continue or end it
-	($line =~ /^[*#: ]+/)  )
 	{
-	handle_block(\$line, \$parser{listsig}, \@outlines);
-	}
-elsif($parser{lastblank}) # Last line was blank. Either clear that flag (if this line is not), or
-			# ignore this line (if this line is)
-	{
-	if($line =~ /^\s*$/) {next;}
-	else
+	if(	($parser{listsig} ne '') || # We're in a block of some sort, start, continue or end it
+		($line =~ /^[*#: ]+/)  )
 		{
-		$parser{lastblank}=0;
-		push(@outlines, "<p>"); # paragraph!
-		push(@outlines, $line); # paragraph!
+		handle_block(\$line, \$parser{listsig}, \@outlines);
+		}
+	elsif($parser{lastblank}) # Last line was blank. Either clear that flag (if this line is not), or
+				# ignore this line (if this line is)
+		{
+		if($line =~ /^\s*$/) {next;}
+		else
+			{
+			$parser{lastblank}=0;
+			push(@outlines, "<p>"); # paragraph!
+			push(@outlines, $line); # paragraph!
+			}
+		}
+	elsif($line =~ /^\s*$/) # Blank line that is not after another
+		{
+		$parser{lastblank}=1;
+		push(@outlines, "</p>");
+		}
+	else # Line with content that we haven't yet handled
+		{
+		push(@outlines, $line);
 		}
 	}
-elsif($line =~ /^\s*$/) # Blank line that is not after another
-	{
-	$parser{lastblank}=1;
-	push(@outlines, "</p>");
-	}
-else # Line with content that we haven't yet handled
-	{
-	push(@outlines, $line);
-	}
-}
 
 # And now, close any outstanding tags by making a blank line and passing it to the block handler
 if($parser{listsig} ne '')
-{
-my $fakeline='';
-handle_block(\$fakeline, \$parser{listsig}, \@outlines);
-}
+	{
+	my $fakeline='';
+	handle_block(\$fakeline, \$parser{listsig}, \@outlines);
+	}
 $returner = join("\n", @outlines);
 return \$returner;
 }
@@ -174,18 +174,18 @@ $args->argok();
 
 my %attrs;
 while($$datref =~ s{\[\!(.*?)\]}{}g)
-{
-my $tag = $1;
-my @tagparts = split(/:/, $tag, 2);
-if(@tagparts == 1)
 	{
-	$attrs{$tagparts[0]} = 1;
+	my $tag = $1;
+	my @tagparts = split(/:/, $tag, 2);
+	if(@tagparts == 1)
+		{
+		$attrs{$tagparts[0]} = 1;
+		}
+	else
+		{
+		$attrs{$tagparts[0]} = $tagparts[1];
+		}
 	}
-else
-	{
-	$attrs{$tagparts[0]} = $tagparts[1];
-	}
-}
 return %attrs;
 }
 
@@ -250,64 +250,65 @@ sub markup_inner_link
 my ($link, $context) = @_;
 my @linkparts = split(/\|/, $link);
 if(($link eq "") || (@linkparts > 2))
-{
-return("!BAD_LINK!");
-}
+	{
+	return("!BAD_LINK!");
+	}
 if(@linkparts==0) # Is this needed?
-{$linkparts[0] = $link;}
+	{
+	$linkparts[0] = $link;
+	}
 
 my @aparts = split(/\:/, $linkparts[0], 2);
 if(@aparts == 0)
-{$aparts[0] = $linkparts[0];}
+	{$aparts[0] = $linkparts[0];}
 
 my $link_text= $linkparts[0];
 my $link_target;
 my $link_status='unknown'; # default
 if(@linkparts == 2) # use url_wikpage and wiki_page_exists
-{
-$link_text = $linkparts[1];
-}
+	{
+	$link_text = $linkparts[1];
+	}
 if(@aparts == 1) # No namespace shift
-{
-my $article_name = ucfirst($aparts[0]);
-$link_target = url_wikpage(page_name => $article_name);
-if(wiki_page_exists(pagename => $article_name) )
 	{
-	$link_status='goodlink';
-	}
-else
-	{
-	$link_status='noexist';
-	}
-}
-else
-{ # This entire section will need cleanup when we do this right
-$link_status='namespace';
-if($aparts[0] eq 'Special')
-	{
-	my $article_name = ucfirst($linkparts[0]);
-	$link_target = url_wikpage(page_name => $article_name); # For Special only.
-	}
-elsif($aparts[0] eq 'Media')
-	{
-	my $filename_unsplit = $aparts[1];
-	my @fn_parts = split(':', $filename_unsplit);
-	my $filename = $fn_parts[-1];
-	if(@fn_parts > 1)
+	my $article_name = ucfirst($aparts[0]);
+	$link_target = url_wikpage(page_name => $article_name);
+	if(wiki_page_exists(pagename => $article_name) )
 		{
-		$context = $fn_parts[0]; # between parts are reserved.
+		$link_status='goodlink';
 		}
-	shift @linkparts;
-	return generate_media_link($filename, $context, @linkparts);
+	else
+		{
+		$link_status='noexist';
+		}
 	}
 else
-	{
-	my $err;
-	($link_target, $err) = handle_namespaced_link(@aparts);
-	if($err) {$link_text = $link_target; $link_target='';} # Allows errors as link text
+	{ # This entire section will need cleanup when we do this right
+	$link_status='namespace';
+	if($aparts[0] eq 'Special')
+		{
+		my $article_name = ucfirst($linkparts[0]);
+		$link_target = url_wikpage(page_name => $article_name); # For Special only.
+		}
+	elsif($aparts[0] eq 'Media')
+		{
+		my $filename_unsplit = $aparts[1];
+		my @fn_parts = split(':', $filename_unsplit);
+		my $filename = $fn_parts[-1];
+		if(@fn_parts > 1)
+			{
+			$context = $fn_parts[0]; # between parts are reserved.
+			}
+		shift @linkparts;
+		return generate_media_link($filename, $context, @linkparts);
+		}
+	else
+		{
+		my $err;
+		($link_target, $err) = handle_namespaced_link(@aparts);
+		if($err) {$link_text = $link_target; $link_target='';} # Allows errors as link text
+		}
 	}
-}
-
 #if(@linkparts == 2) # use url_wikpage and wiki_page_exists
 #	{
 #	$link_text = $linkparts[1];
@@ -322,17 +323,17 @@ my $err = 0;
 my $returner = '';
 my $namespace = $aparts[0];
 if($aparts[0] eq 'BLOG')
-{
-my $blogguts = $aparts[1];
-my ($blogname, $blogzeit) = split(':', $blogguts);
-$returner = url_nodepage(blogname => $blogname, nodezeit => $blogzeit, nodetype => 'entry');
-}
+	{
+	my $blogguts = $aparts[1];
+	my ($blogname, $blogzeit) = split(':', $blogguts);
+	$returner = url_nodepage(blogname => $blogname, nodezeit => $blogzeit, nodetype => 'entry');
+	}
 else
-{
-$err = 1;
-$returner .= "DEBUG: " . join('*', @aparts);
-$returner .= "!UNIMPLEMENTED_NAMESPACED_LINK!";
-}
+	{
+	$err = 1;
+	$returner .= "DEBUG: " . join('*', @aparts);
+	$returner .= "!UNIMPLEMENTED_NAMESPACED_LINK!";
+	}
 return ($returner, $err);
 }
 
@@ -350,21 +351,21 @@ my ($target, $context, @aparts) = @_;
 my $returner = '';
 my $id;
 if($id = file_exists(filename => $target, namespace => $context) ) # FIXME Pass in aparts appropriately
-{
-my %attrs = media_parse_aparts(\@aparts);
-my $alttext;
-if($attrs{alt})
 	{
-	$alttext = $attrs{alt};
+	my %attrs = media_parse_aparts(\@aparts);
+	my $alttext;
+	if($attrs{alt})
+		{
+		$alttext = $attrs{alt};
+		}
+	$returner = embed_media(file_id => $id, filename => $target, context => $context, alt_text => $alttext);
 	}
-$returner = embed_media(file_id => $id, filename => $target, context => $context, alt_text => $alttext);
-}
 else
-{
-$returner .= "Target: $target<br />\n";
-$returner .= "Context: $context<br />\n";
-$returner .= "Aparts: " . join(',', @aparts);
-}
+	{
+	$returner .= "Target: $target<br />\n";
+	$returner .= "Context: $context<br />\n";
+	$returner .= "Aparts: " . join(',', @aparts);
+	}
 return $returner;
 }
 
@@ -372,50 +373,50 @@ sub markup_for_lspart($)
 {
 my ($listsig) = @_;
 if($listsig eq '#')
-{
-return(qq{<ol>\n},qq{</ol>\n});
-}
+	{
+	return(qq{<ol>\n},qq{</ol>\n});
+	}
 elsif($listsig eq '*')
-{
-return(qq{<ul>\n},qq{</ul>\n});
-}
+	{
+	return(qq{<ul>\n},qq{</ul>\n});
+	}
 elsif($listsig eq ':')
-{
-return(qq{<dl>\n},qq{</dl>\n});
-}
+	{
+	return(qq{<dl>\n},qq{</dl>\n});
+	}
 elsif($listsig eq ' ')
-{
-return(qq{<pre>\n},qq{</pre>\n});
-}
+	{
+	return(qq{<pre>\n},qq{</pre>\n});
+	}
 else
-{
-errorpage(text => "Internal error in get_markup_for_last_listpart: [$listsig] is not valid key!\n");
-}
+	{
+	errorpage(text => "Internal error in get_markup_for_last_listpart: [$listsig] is not valid key!\n");
+	}
 }
 
 sub markup_for_lspart_item($)
 {
 my ($listsig) = @_;
 if($listsig eq '#')
-{
-return(qq{<li>},qq{</li>});
-}
+	{
+	return(qq{<li>},qq{</li>});
+	}
 elsif($listsig eq '*')
-{
-return(qq{<li>},qq{</li>});
-}
+	{
+	return(qq{<li>},qq{</li>});
+	}
 elsif($listsig eq ':')
-{
-return(qq{<dd>},qq{</dd>});
-}
+	{
+	return(qq{<dd>},qq{</dd>});
+	}
 elsif($listsig eq ' ')
-{
-return('',''); # Predefined blocks have nothing like this
-}
+	{
+	return('',''); # Predefined blocks have nothing like this
+	}
 else
-{
-errorpage(text => "Internal error in markup_for_lspart_item: [$listsig] is not valid key!\n");
-}
+	{
+	errorpage(text => "Internal error in markup_for_lspart_item: [$listsig] is not valid key!\n");
+	}
 }
 
 sub lspart_diff($$)
@@ -462,11 +463,11 @@ sub lspart_closeall($)
 my @str = @_;
 my $returner = '';
 foreach my $sp (reverse @str)
-{
-my $retpart;
-(undef, $retpart) = markup_for_lspart($sp);
-$returner .= $retpart;
-}
+	{
+	my $retpart;
+	(undef, $retpart) = markup_for_lspart($sp);
+	$returner .= $retpart;
+	}
 return $returner;
 }
 
@@ -475,11 +476,11 @@ sub lspart_openall($)
 my @str = @_;
 my $returner = '';
 foreach my $sp (@str)
-{
-my $retpart;
-($retpart, undef) = markup_for_lspart($sp);
-$returner .= $retpart;
-}
+	{
+	my $retpart;
+	($retpart, undef) = markup_for_lspart($sp);
+	$returner .= $retpart;
+	}
 return $returner;
 }
 
@@ -489,21 +490,21 @@ my ($lineref, $lsigref, $outlineref) = @_;
 my $sig = build_sig_from_line($lineref);
 my @sigparts = split(//, $sig);
 if($sig eq $$lsigref)
-{
-my ($iopener, $icloser) = markup_for_lspart_item($sigparts[-1]);
-push(@$outlineref, qq{$iopener$$lineref$icloser});
-}
+	{
+	my ($iopener, $icloser) = markup_for_lspart_item($sigparts[-1]);
+	push(@$outlineref, qq{$iopener$$lineref$icloser});
+	}
 elsif($sig ne '')
-{
-my ($iopener, $icloser) = markup_for_lspart_item($sigparts[-1]);
-push(@$outlineref, lspart_diff($sig, $$lsigref) . $iopener . $$lineref . $icloser);
-$$lsigref = $sig;
-}
+	{
+	my ($iopener, $icloser) = markup_for_lspart_item($sigparts[-1]);
+	push(@$outlineref, lspart_diff($sig, $$lsigref) . $iopener . $$lineref . $icloser);
+	$$lsigref = $sig;
+	}
 else # We're just here to close the tags
-{
-push(@$outlineref, lspart_diff('', $$lsigref) . $$lineref);
-$$lsigref='';
-}
+	{
+	push(@$outlineref, lspart_diff('', $$lsigref) . $$lineref);
+	$$lsigref='';
+	}
 }
 
 sub build_sig_from_line($)
@@ -511,12 +512,12 @@ sub build_sig_from_line($)
 my ($lr) = @_;
 my $returner='';
 while($$lr =~ s/^([*#: ])//)
-{
-chomp($$lr);
-$returner .= $1;
-if($1 eq ' ')
-	{last;} # Disallow nesting other structures inside preformatted text
-}
+	{
+	chomp($$lr);
+	$returner .= $1;
+	if($1 eq ' ')
+		{last;} # Disallow nesting other structures inside preformatted text
+	}
 return $returner;
 }
 
@@ -526,16 +527,16 @@ my ($in) = @_;
 my %ret;
 
 foreach my $inv (@$in)
-{
-if($inv =~ /^([^=]+)=([^=]+)$/)
-	{ # this-equals-that type params
-	$ret{$1} = $2;
+	{
+	if($inv =~ /^([^=]+)=([^=]+)$/)
+		{ # this-equals-that type params
+		$ret{$1} = $2;
+		}
+	else
+		{ # params set by their name
+		$ret{$1} = undef;
+		}
 	}
-else
-	{ # params set by their name
-	$ret{$1} = undef;
-	}
-}
 return %ret;
 }
 
